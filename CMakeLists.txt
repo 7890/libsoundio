@@ -63,11 +63,16 @@ else()
 endif()
 
 if(ENABLE_WEAKJACK)
+    set(STATUS_JACK "OK (dynamic load)")
+    set(SOUNDIO_HAVE_WEAKJACK true)
     if(SOUNDIO_HAVE_JACK)
-        set(STATUS_JACK "OK (dynamic load)")
-        set(SOUNDIO_HAVE_WEAKJACK true)
+        include_directories(${JACK_INCLUDE_DIR})
     else()
-        set(SOUNDIO_HAVE_WEAKJACK false)
+#       In order to build with weak JACK support when JACK is not installed locally:
+#       cd ${libsoundio_SOURCE_DIR}
+#       git clone https://github.com/jackaudio/headers jack_headers
+        include_directories("${libsoundio_SOURCE_DIR}/jack_headers")
+        set(SOUNDIO_HAVE_JACK true)
     endif()
     set(JACK_LIBRARY "")
 else()
@@ -231,8 +236,13 @@ else()
     else()
         set(WEAKJACK_FLAG " ")
         set(TOGGLE_FLAGS " ")
-        set(LIBDL " ")
+        set(LIBDL "")
     endif()
+
+    if (WIN32)
+        set(LIBDL "")
+    endif (WIN32)
+
     set(LIB_CFLAGS "-std=c11 -fvisibility=hidden -Wall -Werror=missing-prototypes -Werror=strict-prototypes -Werror=old-style-definition -D_REENTRANT -D_POSIX_C_SOURCE=200809L -Wno-missing-braces ${TOGGLE_FLAGS}")
 
     set(EXAMPLE_CFLAGS "-std=c99 -Wall ${WEAKJACK_FLAG}")
