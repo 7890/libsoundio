@@ -12,12 +12,7 @@
 #include "os.h"
 #include "atomics.h"
 
-// jack.h does not properly put `void` in function prototypes with no
-// arguments, so we're forced to temporarily disable -Werror=strict-prototypes
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstrict-prototypes"
-#include <jack/jack.h>
-#pragma GCC diagnostic pop
+#include "weak_libjack.h"
 
 struct SoundIoPrivate;
 int soundio_jack_init(struct SoundIoPrivate *si);

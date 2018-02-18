@@ -32,6 +32,7 @@ option(BUILD_DYNAMIC_LIBS "Build dynamic libraries" ON)
 option(BUILD_EXAMPLE_PROGRAMS "Build example programs" ON)
 option(BUILD_TESTS "Build tests" ON)
 option(ENABLE_JACK "Enable JACK backend" ON)
+option(ENABLE_WEAKJACK "Enable JACK backend with dl" OFF)
 option(ENABLE_PULSEAUDIO "Enable PulseAudio backend" ON)
 option(ENABLE_ALSA "Enable ALSA backend" ON)
 option(ENABLE_COREAUDIO "Enable CoreAudio backend" ON)
@@ -44,7 +45,7 @@ else(Threads_FOUND)
     set(STATUS_THREADS "not found")
 endif(Threads_FOUND)
 
-if(ENABLE_JACK)
+if(ENABLE_JACK OR ENABLE_WEAKJACK)
     find_package(JACK)
     if(JACK_FOUND)
         set(STATUS_JACK "OK")
@@ -59,6 +60,18 @@ else()
     set(STATUS_JACK "disabled")
     set(SOUNDIO_HAVE_JACK false)
     set(JACK_LIBRARY "")
+endif()
+
+if(ENABLE_WEAKJACK)
+    if(SOUNDIO_HAVE_JACK)
+        set(STATUS_JACK "OK (dynamic load)")
+        set(SOUNDIO_HAVE_WEAKJACK true)
+    else()
+        set(SOUNDIO_HAVE_WEAKJACK false)
+    endif()
+    set(JACK_LIBRARY "")
+else()
+    set(SOUNDIO_HAVE_WEAKJACK false)
 endif()
 
 if(ENABLE_PULSEAUDIO)
@@ -159,6 +172,11 @@ if(SOUNDIO_HAVE_JACK)
         "${libsoundio_SOURCE_DIR}/src/jack.c"
     )
 endif()
+if(SOUNDIO_HAVE_WEAKJACK)
+    set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES}
+        "${libsoundio_SOURCE_DIR}/src/weak_libjack.c"
+    )
+endif()
 if(SOUNDIO_HAVE_PULSEAUDIO)
     set(LIBSOUNDIO_SOURCES ${LIBSOUNDIO_SOURCES}
         "${libsoundio_SOURCE_DIR}/src/pulseaudio.c"
@@ -206,8 +224,18 @@ if(MSVC)
     set(LIBM " ")
 else()
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Werror -pedantic")
-    set(LIB_CFLAGS "-std=c11 -fvisibility=hidden -Wall -Werror=strict-prototypes -Werror=old-style-definition -Werror=missing-prototypes -D_REENTRANT -D_POSIX_C_SOURCE=200809L -Wno-missing-braces")
-    set(EXAMPLE_CFLAGS "-std=c99 -Wall")
+    if(SOUNDIO_HAVE_WEAKJACK)
+        set(WEAKJACK_FLAG "-DUSE_WEAK_JACK")
+        set(TOGGLE_FLAGS "${WEAKJACK_FLAG} -Wno-strict-prototypes -Wno-old-style-definition")
+        set(LIBDL "dl")
+    else()
+        set(WEAKJACK_FLAG " ")
+        set(TOGGLE_FLAGS " ")
+        set(LIBDL " ")
+    endif()
+    set(LIB_CFLAGS "-std=c11 -fvisibility=hidden -Wall -Werror=missing-prototypes -Werror=strict-prototypes -Werror=old-style-definition -D_REENTRANT -D_POSIX_C_SOURCE=200809L -Wno-missing-braces ${TOGGLE_FLAGS}")
+
+    set(EXAMPLE_CFLAGS "-std=c99 -Wall ${WEAKJACK_FLAG}")
     set(TEST_CFLAGS "${LIB_CFLAGS} -fprofile-arcs -ftest-coverage")
     set(TEST_LDFLAGS "-fprofile-arcs -ftest-coverage")
     set(LIBM "m")
@@ -232,7 +260,11 @@ if(BUILD_DYNAMIC_LIBS)
         COMPILE_FLAGS ${LIB_CFLAGS}
         LINKER_LANGUAGE C
     )
-    target_link_libraries(libsoundio_shared LINK_PUBLIC ${LIBSOUNDIO_LIBS})
+    if(ENABLE_WEAKJACK)
+        target_link_libraries(libsoundio_shared LINK_PUBLIC ${LIBSOUNDIO_LIBS} ${LIBDL})
+    else()
+        target_link_libraries(libsoundio_shared LINK_PUBLIC ${LIBSOUNDIO_LIBS})
+    endif()
     install(TARGETS libsoundio_shared DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
 
@@ -300,7 +332,13 @@ endif()
 
 if(BUILD_TESTS)
     add_executable(unit_tests "${libsoundio_SOURCE_DIR}/test/unit_tests.c" ${LIBSOUNDIO_SOURCES})
-    target_link_libraries(unit_tests LINK_PUBLIC ${LIBSOUNDIO_LIBS})
+
+    if(SOUNDIO_HAVE_WEAKJACK)
+        target_link_libraries(unit_tests LINK_PUBLIC ${LIBSOUNDIO_LIBS} ${LIBDL})
+    else()
+        target_link_libraries(unit_tests LINK_PUBLIC ${LIBSOUNDIO_LIBS})
+    endif()
+
     set_target_properties(unit_tests PROPERTIES
         LINKER_LANGUAGE C
         COMPILE_FLAGS ${TEST_CFLAGS}
@@ -308,7 +346,13 @@ if(BUILD_TESTS)
     )
 
     add_executable(latency "${libsoundio_SOURCE_DIR}/test/latency.c" ${LIBSOUNDIO_SOURCES})
-    target_link_libraries(latency LINK_PUBLIC ${LIBSOUNDIO_LIBS} ${LIBM})
+
+    if(SOUNDIO_HAVE_WEAKJACK)
+        target_link_libraries(latency LINK_PUBLIC ${LIBSOUNDIO_LIBS} ${LIBM} ${LIBDL})
+    else()
+        target_link_libraries(latency LINK_PUBLIC ${LIBSOUNDIO_LIBS} ${LIBM})
+    endif()
+
     set_target_properties(latency PROPERTIES
         LINKER_LANGUAGE C
         COMPILE_FLAGS ${LIB_CFLAGS}
