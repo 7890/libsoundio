@@ -1,0 +1,3 @@
+[submodule "jack_headers/jack"]
+	path = jack_headers/jack
+	url = https://github.com/jackaudio/headers
