@@ -70,7 +70,32 @@ if(ENABLE_WEAKJACK)
     else()
 #       In order to build with weak JACK support when JACK is not installed locally:
 #       cd ${libsoundio_SOURCE_DIR}
-#       git clone https://github.com/jackaudio/headers jack_headers
+#       git submodule add https://github.com/jackaudio/headers jack_headers
+#       git commit -am "jackaudio/headers submodule"
+
+        message("Building with weak JACK support, without local JACK installation")
+
+        find_package(Git)
+        if(NOT GIT_FOUND)
+          message(FATAL_ERROR "git not found. Can not download jack headers to build with weak JACK support.")
+        endif()
+
+#       https://cliutils.gitlab.io/modern-cmake/chapters/smallinc.html
+        if(GIT_FOUND AND EXISTS "${libsoundio_SOURCE_DIR}/.git")
+        message("Using https://github.com/jackaudio/headers")
+        # Update submodules as needed
+            option(GIT_SUBMODULE "Check submodules during build" ON)
+            if(GIT_SUBMODULE)
+                message(STATUS "Submodule update")
+                execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+                            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                            RESULT_VARIABLE GIT_SUBMOD_RESULT)
+                if(NOT GIT_SUBMOD_RESULT EQUAL "0")
+                    message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+                endif()
+            endif()
+        endif()
+
         include_directories("${libsoundio_SOURCE_DIR}/jack_headers")
         set(SOUNDIO_HAVE_JACK true)
     endif()
